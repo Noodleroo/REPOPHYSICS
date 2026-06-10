@@ -54,10 +54,6 @@ public class ClientInputHandler {
                     PlayerGrabHandler.lastLoggedEntityId = droppedEntityId;
                     PlayerGrabHandler.snapIgnoreTicks = 20;
                 }
-                PacketDistributor.sendToServer(
-                        new ServerboundGrabPacket(droppedEntityId, 0, 0, 0, true)
-                );
-                PlayerGrabHandler.forceRelease(false);
             }
 
             isCurrentlyHolding = false;

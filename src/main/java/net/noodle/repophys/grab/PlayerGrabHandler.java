@@ -1,6 +1,7 @@
 package net.noodle.repophys.grab;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
@@ -11,10 +12,8 @@ import net.noodle.repophys.client.ClientInputHandler;
 import net.noodle.repophys.network.ServerboundGrabPacket;
 
 public class PlayerGrabHandler {
-    public static Entity grabbedEntity = null;
-    public static int clientHoveredEntityId = -1;
-    public static int lastSnappedEntityId = -1;
-    private static int networkThrottleTicks = 0;
+    public static BlockPos grabbedBlockPos = null;
+    public static BlockPos clientHoveredBlockPos = null;
 
     // PERSISTENT CONTEXT TRACKERS
     public static int lastLoggedEntityId = -1;
@@ -41,18 +40,13 @@ public class PlayerGrabHandler {
         }
 
         // 2. STATE A: ACTIVE DRAGGING MODE
-        if (ClientInputHandler.isCurrentlyHolding) {
-            // First-frame promotion: convert hover target to held entity
-            if (grabbedEntity == null && clientHoveredEntityId != -1) {
-                Entity target = mc.level.getEntity(clientHoveredEntityId);
-                if (target != null && target.isAlive()) {
-                    grabbedEntity = target;
-                    networkThrottleTicks = 0;
-                }
-            }
+        if (grabbedBlockPos == null && clientHoveredBlockPos != null) {
+            // Directly lock our target onto the hovered block coordinates!
+            grabbedBlockPos = clientHoveredBlockPos;
+        }
 
-            if (grabbedEntity != null) {
-                if (!grabbedEntity.isAlive()) {
+            if (grabbedBlockPos != null) {
+                if (!grabbedBlockPos.isAlive()) {
                     forceRelease(false);
                     return;
                 }
@@ -69,20 +63,14 @@ public class PlayerGrabHandler {
                 );
 
                 // Force client model positioning instantly to prevent local screen stutter
-                grabbedEntity.setNoGravity(true);
-                grabbedEntity.setPos(targetPosVec.x, targetPosVec.y, targetPosVec.z);
-                grabbedEntity.setDeltaMovement(Vec3.ZERO);
 
                 // Continuously send the precise coordinate positions over to the server maps
-                PacketDistributor.sendToServer(
-                        new ServerboundGrabPacket(grabbedEntity.getId(), targetPosVec.x, targetPosVec.y, targetPosVec.z, false)
-                );
             }
             return;
         }
 
         // 3. STATE B: THE RELEASE PASS INTERCEPTOR
-        else if (grabbedEntity != null) {
+        else if (grabbedBlockPos != null) {
             Vec3 currentLook = mc.player.getViewVector(1.0F);
 
             // Calculate a clean handoff velocity based on camera look vectors
@@ -90,7 +78,7 @@ public class PlayerGrabHandler {
 
             // Pass the custom throw vector to the server via the tx, ty, tz arguments
             PacketDistributor.sendToServer(new ServerboundGrabPacket(
-                    grabbedEntity.getId(),
+                    grab
                     throwVelocity.x,
                     throwVelocity.y,
                     throwVelocity.z,
@@ -98,15 +86,15 @@ public class PlayerGrabHandler {
             ));
 
             // Clean fields immediately
-            clientHoveredEntityId = -1;
+            clientHoveredBlockPos = -1;
             lastLoggedEntityId = -1;
-            grabbedEntity = null;
+            grabbedBlockPos = null;
             networkThrottleTicks = 0;
             snapIgnoreTicks = 15;
             return;
         }
 
-        if (ClientInputHandler.isCurrentlyHolding || grabbedEntity != null) {
+        if (ClientInputHandler.isCurrentlyHolding || grabbedBlockPos != null) {
             return;
         }
 
@@ -114,15 +102,15 @@ public class PlayerGrabHandler {
         Entity pointedEntity = performSableAwareRaycast(mc, reachDistance);
 
         if (pointedEntity != null) {
-            PlayerGrabHandler.clientHoveredEntityId = pointedEntity.getId();
-            if (PlayerGrabHandler.clientHoveredEntityId != lastLoggedEntityId) {
+            PlayerGrabHandler.clientHoveredBlockPos = pointedEntity.getId();
+            if (PlayerGrabHandler.clientHoveredBlockPos != lastLoggedEntityId) {
                 if (RepophysConfig.CLIENT.enableChatLogging.get()) {
-                    mc.player.displayClientMessage(Component.literal("§b[Tractor Beam]§a Locked onto ID: " + PlayerGrabHandler.clientHoveredEntityId), false);
+                    mc.player.displayClientMessage(Component.literal("§b[Tractor Beam]§a Locked onto ID: " + PlayerGrabHandler.clientHoveredBlockPos), false);
                 }
-                lastLoggedEntityId = PlayerGrabHandler.clientHoveredEntityId;
+                lastLoggedEntityId = PlayerGrabHandler.clientHoveredBlockPos;
             }
         } else {
-            PlayerGrabHandler.clientHoveredEntityId = -1;
+            PlayerGrabHandler.clientHoveredBlockPos = -1;
             if (lastLoggedEntityId != -1) {
                 if (RepophysConfig.CLIENT.enableChatLogging.get()) {
                     mc.player.displayClientMessage(Component.literal("§b[Tractor Beam]§c Target Lost"), false);
@@ -133,11 +121,11 @@ public class PlayerGrabHandler {
     }
 
     public static void forceRelease(boolean isSnap) {
-        if (grabbedEntity != null) {
-            PacketDistributor.sendToServer(new ServerboundGrabPacket(grabbedEntity.getId(), 0, 0, 0, true));
-            clientHoveredEntityId = -1;
+        if (grabbedBlockPos != null) {
+            PacketDistributor.sendToServer(new ServerboundGrabPacket(grabbedBlockPos.getId(), 0, 0, 0, true));
+            clientHoveredBlockPos = -1;
             lastLoggedEntityId = -1;
-            grabbedEntity = null;
+            grabbedBlockPos = null;
         }
         networkThrottleTicks = 0;
     }
@@ -155,7 +143,7 @@ public class PlayerGrabHandler {
                 cameraEntity, eyePos, reachVec, searchBox, entity -> {
                     if (entity.isSpectator() || !entity.isAlive()) return false;
                     if (ClientInputHandler.isCurrentlyHolding) return false; // Ignore if holding
-                    if (grabbedEntity != null && entity.getId() == grabbedEntity.getId()) return false;
+                    if (grabbedBlockPos != null && entity.getId() == grabbedBlockPos.getId()) return false;
                     if (snapIgnoreTicks > 0 && entity.getId() == lastLoggedEntityId) return false;
                     return true;
                 }, reach * reach

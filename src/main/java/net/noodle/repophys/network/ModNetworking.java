@@ -1,8 +1,8 @@
 package net.noodle.repophys.network;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -19,12 +19,11 @@ public class ModNetworking {
     public static final Set<UUID> ACTIVE_HOLDERS = new HashSet<>();
     public static final ConcurrentHashMap<UUID, GrabData> ACTIVE_GRABS = new ConcurrentHashMap<>();
 
-    public record GrabData(int entityId, double tx, double ty, double tz) {}
+    // ✨ UPDATED: Record stores BlockPos instead of integer entity ID
+    public static record GrabData(BlockPos targetBlockPos, double tx, double ty, double tz) {}
 
     public static void init(IEventBus modBus) {
         modBus.addListener(ModNetworking::registerPackets);
-
-        // Connect our tick listener up to the global game event loops
         NeoForge.EVENT_BUS.register(ModNetworking.class);
     }
 
@@ -37,17 +36,10 @@ public class ModNetworking {
 
                 if (packet.isReleased()) {
                     ACTIVE_GRABS.remove(uuid);
-
-                    ServerLevel world = player.serverLevel();
-                    Entity serverEntity = world.getEntity(packet.entityId());
-                    if (serverEntity != null && serverEntity.isAlive()) {
-                        // Hand operations over to the dedicated physics file
-                        PhysicsEngine.executeThrowHandoff(player, world, serverEntity, packet);
-                    } else {
-                        PhysicsEngine.purgeUserData(uuid);
-                    }
+                    // Block throw handoff placeholder can sit here once we hook into Sable's assemblies!
                 } else {
-                    ACTIVE_GRABS.put(uuid, new GrabData(packet.entityId(), packet.tx(), packet.ty(), packet.tz()));
+                    // ✨ FIXED: Uses packet.targetBlockPos() instead of packet.entityId()
+                    ACTIVE_GRABS.put(uuid, new GrabData(packet.targetBlockPos(), packet.tx(), packet.ty(), packet.tz()));
                 }
             });
         });
@@ -61,20 +53,14 @@ public class ModNetworking {
             ServerPlayer player = event.getServer().getPlayerList().getPlayer(playerUUID);
             if (player == null) {
                 ACTIVE_GRABS.remove(playerUUID);
-                PhysicsEngine.purgeUserData(playerUUID);
                 return;
             }
 
             ServerLevel world = player.serverLevel();
-            Entity serverEntity = world.getEntity(grabData.entityId());
 
-            if (serverEntity != null && serverEntity.isAlive()) {
-                // Hand dragging ticks over to the physics file
-                PhysicsEngine.tickGrabPhysics(player, world, serverEntity, grabData);
-            } else {
-                ACTIVE_GRABS.remove(playerUUID);
-                PhysicsEngine.purgeUserData(playerUUID);
-            }
+            // 🧱 BLOCK PHYSICS TICKER PLACEHOLDER:
+            // This is where your code will read grabData.targetBlockPos()
+            // and pass the grid values directly over to Sable to drag the block around!
         });
     }
 }
