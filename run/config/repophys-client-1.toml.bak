@@ -1,0 +1,44 @@
+#Tractor Beam Physics & Mechanical Configurations
+[physics]
+	#How far away (in blocks) you can scan and lock onto entities.
+	# Default: 6.0
+	# Range: 1.0 ~ 64.0
+	reachDistance = 4.0
+	#The distance (in blocks) the grabbed entity floats in front of the player.
+	# Default: 2.5
+	# Range: 0.5 ~ 16.0
+	holdDistance = 2.5
+	#The threshold distance before the beam snaps and drops the object.
+	# Default: 8.0
+	# Range: 2.0 ~ 128.0
+	maxHoldDistance = 5.5
+	# The smoothing interpolation weight for rendering a gripped entity on the client. Lower = floatier/heavier trailing, Higher = immediate/tight crosshair snapping. Range: 0.01 to 1.0
+	# Default: 0.75
+	# Range: 0.01 ~ 1.0
+	tractorBeamSmoothness = 1.0
+
+#Visual Overlay Configuration (Color Channels range from 0.0 to 1.0)
+[visuals]
+	#Red color component
+	# Default: 0.0
+	# Range: 0.0 ~ 1.0
+	boxRed = 0.0
+	#Green color component
+	# Default: 0.8
+	# Range: 0.0 ~ 1.0
+	boxGreen = 0.8
+	#Blue color component
+	# Default: 1.0
+	# Range: 0.0 ~ 1.0
+	boxBlue = 1.0
+	#Alpha component (Opacity/Transparency)
+	# Default: 1.0
+	# Range: 0.0 ~ 1.0
+	boxAlpha = 1.0
+
+#Developer Debug Indicators
+[debug]
+	#Should the tractor beam broadcast target locking notices to chat?
+	enableChatLogging = true
+	#Should the background tick loop post a pulsing 'Active' status update on the actionbar?
+	enableActionbarHeartbeat = true

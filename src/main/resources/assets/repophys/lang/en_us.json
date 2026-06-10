@@ -1,0 +1,19 @@
+{
+  "repophys.configuration.title": "Repository Physics configuration",
+
+  "repophys.configuration.physics": "Tractor Beam Physics",
+  "repophys.configuration.reachDistance": "Beam Reach Distance",
+  "repophys.configuration.holdDistance": "Object Floating Distance",
+  "repophys.configuration.maxHoldDistance": "Maximum Cable Length (Snap Threshold)",
+  "repophys.configuration.tractorBeamSmoothness": "Smooth Grabbing Physics",
+
+  "repophys.configuration.visuals": "Visual Overlays",
+  "repophys.configuration.boxRed": "Outline Red Channel",
+  "repophys.configuration.boxGreen": "Outline Green Channel",
+  "repophys.configuration.boxBlue": "Outline Blue Channel",
+  "repophys.configuration.boxAlpha": "Outline Opacity (Alpha)",
+
+  "repophys.configuration.debug": "Developer Diagnostics",
+  "repophys.configuration.enableChatLogging": "Log Target Locks to Chat",
+  "repophys.configuration.enableActionbarHeartbeat": "Show Loop Heartbeat Tracker"
+}

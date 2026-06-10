@@ -1,0 +1,31 @@
+/reload
+/reload mod
+/veil buffers enable all
+/particle minecraft:flame
+/particle minecraft:flame ~ ~ ~
+/particle minecraft:flame ~ ~ ~ ~ ~ ~ 0.01 400
+/particle minecraft:flame ~ ~ ~ ~ ~ ~ 1 400
+/time set day
+/gamerule doMobSpawning false
+/kill @e[type=!minecraft:player]
+/time set day
+/give Dev repophys:example_item
+/give Dev repophys:grab_physics_block
+/time set day
+/tick freeze
+/effect give @e[type=minecraft:item] minecraft:glowing
+/effect give @e[type=minecraft:item] minecraft:glowing infinite 100 true
+/reload
+/summon minecraft:falling_block
+/summon falling_block ~ ~ ~ {BlockState:{Name:"minecraft:stone"},NoGravity:1b}
+/kill @a
+/time set day
+/effect give Dev minecraft:speed infinite 100 true
+/effect clear Dev
+/time set day
+/gamerule doDaylightCycle false
+/summon falling_block ~ ~ ~ {NoGravity:1b,Time:1,BlockState:{Name:"minecraft:stone"}}
+/kill @e[type=minecraft:slime]
+/tp 0 0 0
+/tp @e[type=minecraft:item]
+/tp @e[type=minecraft:item] Dev
