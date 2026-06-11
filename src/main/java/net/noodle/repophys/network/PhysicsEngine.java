@@ -1,36 +1,130 @@
 package net.noodle.repophys.network;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+
+import dev.ryanhcode.sable.companion.SubLevelAccess;
+import dev.ryanhcode.sable.companion.math.Pose3d;
+import dev.ryanhcode.sable.sublevel.SubLevel; // Imports the main class file from your project
+
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PhysicsEngine {
 
-    private static final ConcurrentHashMap<UUID, Vec3> PREVIOUS_POSITIONS = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<UUID, SubLevelAccess> HELD_BLOCK_STRUCTURES = new ConcurrentHashMap<>();
+
+    /**
+     * Spawns the structure assembly using proper matrix and plot-chunk layout bounds.
+     */
+    public static void beginBlockGrabAssembly(ServerPlayer player, ServerLevel world, BlockPos targetBlockPos) {
+        UUID uuid = player.getUUID();
+
+        if (HELD_BLOCK_STRUCTURES.containsKey(uuid)) return;
+
+        BlockState originalState = world.getBlockState(targetBlockPos);
+        if (originalState.isAir() || originalState.getDestroySpeed(world, targetBlockPos) < 0) return;
+
+        int plotX = targetBlockPos.getX() >> 4;
+        int plotY = targetBlockPos.getZ() >> 4;
+
+        Pose3d initialPose = new Pose3d();
+        initialPose.position().set(targetBlockPos.getX(), targetBlockPos.getY(), targetBlockPos.getZ());
+
+        dev.ryanhcode.sable.api.sublevel.SubLevelContainer container = dev.ryanhcode.sable.api.sublevel.SubLevelContainer.getContainer(world);
+        if (container == null) return;
+
+        // Generate a random unique ID for this new floating block capsule
+        UUID structureId = UUID.randomUUID();
+
+        // ✨ THE ACCURATE SABLE PUBLIC ACCESSIBLE METHOD:
+        // We use the public getter/factory method that matches your library's signature requirements!
+        SubLevelAccess physicsStructure = container.allocateSubLevel(structureId, plotX, plotY, initialPose);
+
+        if (physicsStructure != null) {
+            if (physicsStructure instanceof SubLevel fullSubLevel) {
+                fullSubLevel.getPlot().onBlockChange(new BlockPos(0, 0, 0), originalState);
+            }
+
+            world.setBlock(targetBlockPos, Blocks.AIR.defaultBlockState(), 3);
+            HELD_BLOCK_STRUCTURES.put(uuid, physicsStructure);
+        }
+    }
 
     public static void tickGrabPhysics(ServerPlayer player, ServerLevel world, BlockPos targetBlockPos, ModNetworking.GrabData grabData) {
         UUID uuid = player.getUUID();
-        Vec3 targetPos = new Vec3(grabData.tx(), grabData.ty(), grabData.tz());
 
-        Vec3 lastPos = PREVIOUS_POSITIONS.get(uuid);
-        PREVIOUS_POSITIONS.put(uuid, targetPos);
+        if (!HELD_BLOCK_STRUCTURES.containsKey(uuid)) {
+            beginBlockGrabAssembly(player, world, targetBlockPos);
+            return;
+        }
 
-        // Placeholder for Sable block assemblies manipulation logic!
+        SubLevelAccess baseAccess = HELD_BLOCK_STRUCTURES.get(uuid);
+
+        if (baseAccess instanceof SubLevel heldStructure) {
+            if (heldStructure.isRemoved()) {
+                HELD_BLOCK_STRUCTURES.remove(uuid);
+                return;
+            }
+
+            double targetX = grabData.tx();
+            double targetY = grabData.ty();
+            double targetZ = grabData.tz();
+
+            Pose3d currentPose = heldStructure.logicalPose();
+            if (currentPose != null) {
+                double currentX = currentPose.position().x();
+                double currentY = currentPose.position().y();
+                double currentZ = currentPose.position().z();
+
+                double lerpFactor = 0.35D;
+                double nextX = currentX + (targetX - currentX) * lerpFactor;
+                double nextY = currentY + (targetY - currentY) * lerpFactor;
+                double nextZ = currentZ + (targetZ - currentZ) * lerpFactor;
+
+                currentPose.position().set(nextX, nextY, nextZ);
+            }
+        } else {
+            HELD_BLOCK_STRUCTURES.remove(uuid);
+        }
     }
 
     public static void executeThrowHandoff(ServerPlayer player, ServerLevel world, BlockPos targetBlockPos, ServerboundGrabPacket packet) {
         UUID uuid = player.getUUID();
-        PREVIOUS_POSITIONS.remove(uuid);
+        SubLevelAccess baseAccess = HELD_BLOCK_STRUCTURES.remove(uuid);
 
-        // Placeholder for final block landing placement!
+        if (baseAccess instanceof SubLevel heldStructure) {
+            BlockState storedBlockState = heldStructure.getPlot().getEmbeddedLevelAccessor().getBlockState(new  BlockPos(0, 0, 0));
+
+            if (storedBlockState != null && !storedBlockState.isAir()) {
+                Pose3d finalPose = heldStructure.logicalPose();
+                if (finalPose != null) {
+                    BlockPos impactPos = BlockPos.containing(finalPose.position().x(), finalPose.position().y(), finalPose.position().z());
+
+                    if (!world.getBlockState(impactPos).isAir()) {
+                        impactPos = impactPos.above();
+                    }
+
+                    world.setBlock(impactPos, storedBlockState, 3);
+                }
+            }
+
+            heldStructure.markRemoved();
+        }
     }
 
     public static void purgeUserData(UUID uuid) {
-        PREVIOUS_POSITIONS.remove(uuid);
+        HELD_BLOCK_STRUCTURES.remove(uuid);
     }
 }
+
+
+
+
+
 
 
 

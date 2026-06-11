@@ -58,9 +58,8 @@ public class ModNetworking {
 
             ServerLevel world = player.serverLevel();
 
-            // 🧱 BLOCK PHYSICS TICKER PLACEHOLDER:
-            // This is where your code will read grabData.targetBlockPos()
-            // and pass the grid values directly over to Sable to drag the block around!
+            //Tells the engine to run the drag and positioning logic!
+            PhysicsEngine.tickGrabPhysics(player, world, grabData.targetBlockPos(), grabData);
         });
     }
 }

@@ -1,154 +1,141 @@
 package net.noodle.repophys.client;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.entity.Entity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.MovementInputUpdateEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.noodle.repophys.Repophys;
 import net.noodle.repophys.grab.PlayerGrabHandler;
-import net.noodle.repophys.movement.PlayerRollHandler;
-import net.noodle.repophys.movement.PlayerSquishHandler;
-import net.noodle.repophys.network.ServerboundGrabPacket;
-import org.lwjgl.glfw.GLFW;
+import org.jetbrains.annotations.NotNull;
 
 @EventBusSubscriber(modid = Repophys.MODID, value = Dist.CLIENT)
 public class ClientInputHandler {
-    public static int clientHoveredEntityId = -1;
 
     public static boolean isCurrentlyHolding = false;
-    public static boolean isHeavyCrouching = false;
-    public static int slideTicks = 0;
+    public static float customHandPoseTicks = 0.0F;
+
+    /**
+     * ✨ CONTINUOUS TICK LOOPER: Wakes up the PlayerGrabHandler
+     * so it scans and drags objects every single client-side frame!
+     */
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && mc.level != null) {
+            // Keep the custom hand pose floating bob animation ticking smoothly
+            if (isCurrentlyHolding) {
+                customHandPoseTicks += 0.05F;
+            }
+
+            // Force the grab tick loop to evaluate every frame
+            PlayerGrabHandler.executeEntityGrabTick();
+        }
+    }
+
+    /**
+     * ✨ MOUSE INTERCEPTOR PRE-PASS: Intercepts the left-click action
+     * BEFORE vanilla processes it so you do not punch/break the blocks!
+     */
+    @SubscribeEvent
+    public static void onMouseInputPre(InputEvent.MouseButton.Pre event) {
+        // Button 0 is the standard left-click button!
+        if (event.getButton() != 0) return;
+
+        // Action 1 means the button was PRESSED DOWN
+        if (event.getAction() == 1) {
+            // Only activate if we are looking at a valid targeted block coordinate
+            if (PlayerGrabHandler.clientHoveredBlockPos != null) {
+                isCurrentlyHolding = true;
+                customHandPoseTicks = 0.0F;
+
+                // 🛑 CANCEL VANILLA PUNCH: Stops the game from breaking the block you are trying to grab!
+                event.setCanceled(true);
+            }
+        }
+        // Action 0 means the button was RELEASED (let go)
+        else if (event.getAction() == 0) {
+            if (isCurrentlyHolding) {
+                PlayerGrabHandler.snapIgnoreTicks = 20;
+                PlayerGrabHandler.forceRelease(false);
+                isCurrentlyHolding = false;
+                customHandPoseTicks = 0.0F;
+
+                // Cancel vanilla release updates during the handoff phase
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    // 💾 Ensure these tracking variables remain at the top of your class file:
+    private static int slideTicksLeft = 0;
+    private static boolean wasCrouchingLastTick = false;
     private static boolean wasSprintingLastTick = false;
-    private static boolean wasSneakingLastTick = false;
-    private static boolean isMousePhysicallyDown = false;
-    public static float customHandPoseTicks = 0.0f;
+    private static net.minecraft.world.phys.Vec3 slideDirection = net.minecraft.world.phys.Vec3.ZERO;
 
     @SubscribeEvent
-    public static void onClientTickPre(ClientTickEvent.Pre event) {
-        Minecraft mc = Minecraft.getInstance();
+    public static void onMovementInput(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
 
-        // 1. DIRECT HARDWARE CHECK
-        long windowHandle = mc.getWindow().getWindow();
-        boolean isLeftClickHeldDown = GLFW.glfwGetMouseButton(windowHandle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-        isMousePhysicallyDown = isLeftClickHeldDown;
+        boolean isCrouchPressed = event.getInput().shiftKeyDown;
+        boolean isSprintingNow = mc.player.isSprinting();
 
-        boolean hasValidTarget = PlayerGrabHandler.clientHoveredEntityId != -1
-                || PlayerGrabHandler.grabbedEntity != null;
+        // 1. ✨ CLEAN COLLISION RESOLUTION: Calculate the standing box directly using coordinates!
+        // This replicates the player's full 0.6w x 1.8h standing hitbox boundary footprint.
+        double x = mc.player.getX();
+        double y = mc.player.getY();
+        double z = mc.player.getZ();
 
-        if (isMousePhysicallyDown && mc.screen == null) {
-            isCurrentlyHolding = true;
-            customHandPoseTicks += 0.05f;
-        } else {
-            if (isCurrentlyHolding) {
-                int droppedEntityId = -1;
-                if (PlayerGrabHandler.grabbedEntity != null) {
-                    droppedEntityId = PlayerGrabHandler.grabbedEntity.getId();
-                    PlayerGrabHandler.lastLoggedEntityId = droppedEntityId;
-                    PlayerGrabHandler.snapIgnoreTicks = 20;
+        net.minecraft.world.phys.AABB simulatedStandingBox = new net.minecraft.world.phys.AABB(
+                x - 0.3D, y, z - 0.3D,
+                x + 0.3D, y + 1.8D, z + 0.3D
+        );
+
+        // Ask the level collision map if our simulated head space intersects a solid block or slab
+        boolean isBlockedByCeiling = !mc.level.noCollision(mc.player, simulatedStandingBox);
+
+        // 2. THE ACTIVE SLIDE LOOP
+        if (slideTicksLeft > 0) {
+            slideTicksLeft--;
+
+            // Lock player into crouched state during active slide frames
+            event.getInput().shiftKeyDown = true;
+
+            // Smooth speed decay (8-tick layout structure)
+            double currentSlideSpeed = 0.4D + ((double) slideTicksLeft / 30.0D) * 1.9D;
+
+            net.minecraft.world.phys.Vec3 activeSlideVelocity = new net.minecraft.world.phys.Vec3(
+                    slideDirection.x * currentSlideSpeed,
+                    mc.player.getDeltaMovement().y,
+                    slideDirection.z * currentSlideSpeed
+            );
+
+            mc.player.setDeltaMovement(activeSlideVelocity);
+        }
+        // 3. CEILING OVERRIDE: Keep crouching if your head is trapped under a slab block!
+        else if (isBlockedByCeiling) {
+            event.getInput().shiftKeyDown = true;
+        }
+
+        // 4. TRIGGER PASS: Fires when you hit the crouch key while sprinting
+        if (mc.player.onGround() && isCrouchPressed && !wasCrouchingLastTick) {
+            if (isSprintingNow || wasSprintingLastTick) {
+                // Only slide if we aren't already stuck under a roof ceiling
+                if (slideTicksLeft <= 0 && !isBlockedByCeiling) {
+                    slideTicksLeft = 8;
+
+                    net.minecraft.world.phys.Vec3 lookAngle = mc.player.getLookAngle();
+                    slideDirection = new net.minecraft.world.phys.Vec3(lookAngle.x, 0, lookAngle.z).normalize();
                 }
             }
-
-            isCurrentlyHolding = false;
-            customHandPoseTicks = 0.0f;
         }
 
-        // 2. Process physics dragging engine ticks
-        net.noodle.repophys.grab.PlayerGrabHandler.executeEntityGrabTick();
-
-        if (net.noodle.repophys.grab.PlayerGrabHandler.grabbedEntity != null) {
-            int targetId = net.noodle.repophys.grab.PlayerGrabHandler.grabbedEntity.getId();
-            Entity clientSideEntity = mc.level.getEntity(targetId);
-            if (clientSideEntity != null) {
-                clientSideEntity.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-                clientSideEntity.noPhysics = true;
-            }
-        }
-
-        if (slideTicks > 0) slideTicks--;
-
-        // Heavy crouching state calculation
-        if (isCurrentlyHolding && mc.screen == null) {
-            boolean isSneakPressed = mc.options.keyShift.isDown();
-            if (isSneakPressed) {
-                isHeavyCrouching = true;
-                Vec3 currentMovement = mc.player.getDeltaMovement();
-                if (currentMovement != null) {
-                    mc.player.setDeltaMovement(currentMovement.x * 0.06D, currentMovement.y, currentMovement.z * 0.3D);
-                }
-            } else {
-                isHeavyCrouching = false;
-            }
-        } else {
-            isHeavyCrouching = false;
-        }
+        // Save tracking states for the next frame transition
+        wasCrouchingLastTick = isCrouchPressed;
+        wasSprintingLastTick = isSprintingNow;
     }
 
-    @SubscribeEvent
-    public static void onAbsoluteLeftClickOverride(InputEvent.MouseButton.Pre event) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null || mc.level == null) return;
-
-        if (event.getButton() == org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            event.setCanceled(true);
-
-            if (event.getAction() == org.lwjgl.glfw.GLFW.GLFW_PRESS) {
-                isMousePhysicallyDown = true;
-                isCurrentlyHolding = true;
-                customHandPoseTicks = 0.0f;
-
-                mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("Holding"), true);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onMovementInputUpdate(MovementInputUpdateEvent event) {
-        if (event.getEntity() == null) return;
-        if (event.getEntity() instanceof LocalPlayer player) {
-            boolean hasCeilingAbove = PlayerSquishHandler.TRAPPED_PLAYERS.contains(player.getUUID());
-            boolean isSneakPressed = Minecraft.getInstance().options.keyShift.isDown();
-            boolean isRolling = PlayerRollHandler.isRolling();
-            boolean justPressedSneak = isSneakPressed && !wasSneakingLastTick;
-
-            if (justPressedSneak && wasSprintingLastTick && slideTicks == 0 && !isRolling && player.onGround()) {
-                slideTicks = 9;
-            }
-
-            wasSprintingLastTick = player.isSprinting();
-            wasSneakingLastTick = isSneakPressed;
-
-            boolean isSliding = slideTicks > 0;
-
-            if (isSneakPressed || hasCeilingAbove || isRolling || isSliding) {
-                isHeavyCrouching = true;
-                if (player.input != null) {
-                    player.input.shiftKeyDown = true;
-                    if (isRolling) {
-                        player.input.leftImpulse = 0f;
-                        player.input.forwardImpulse = 1.0f;
-                    } else if (isSliding) {
-                        player.input.forwardImpulse = 1.0f;
-                        player.input.leftImpulse = 0f;
-                        float lookAngle = player.getYRot() * ((float) Math.PI / 180F);
-                        double slideMultiplier = 0.14D * (slideTicks / 9.0D);
-                        Vec3 vel = player.getDeltaMovement();
-                        player.setDeltaMovement(vel.x + (-Math.sin(lookAngle) * slideMultiplier), vel.y, vel.z + (Math.cos(lookAngle) * slideMultiplier));
-                    } else {
-                        player.xxa *= 0.3f;
-                        player.zza *= 0.2f;
-                    }
-                }
-            } else {
-                isHeavyCrouching = false;
-            }
-        }
-    }
 }
