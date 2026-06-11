@@ -9,6 +9,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.noodle.repophys.Repophys;
 import net.noodle.repophys.network.ModNetworking;
@@ -77,7 +78,6 @@ public class VanillaFeatureDisabler {
         }
     }
 
-    // --- 2. DISABLE VANILLA FALL DAMAGE BUFFER FOR EXTRA JUMPS ---
     @SubscribeEvent
     public static void onPlayerFall(LivingFallEvent event) {
         if (event.getEntity() instanceof net.minecraft.world.entity.player.Player player) {
@@ -85,6 +85,16 @@ public class VanillaFeatureDisabler {
             if (PlayerPowerUps.extraJumpsCount > 0) {
                 event.setDistance(event.getDistance() * 0.5F);
             }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onBlockBreak(BlockEvent.BreakEvent event) {
+        // If the levels mod IS installed, enforce total lock down.
+        // If it's NOT installed (Sandbox mode), skip this and let them break blocks!
+        if (com.noodleroo.repophysics.util.RepoModCheck.isLevelsInstalled()) {
+            event.setCanceled(true);
+            // Optional: Send a action bar message "Cannot break blocks during a run!"
         }
     }
 }

@@ -6,6 +6,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.noodle.repophys.blocks.ModBlocks;
 import net.noodle.repophys.network.ModNetworking;
+import net.noodle.repophys.util.RepophysConfig;
 
 @Mod("repophys")
 public class Repophys {

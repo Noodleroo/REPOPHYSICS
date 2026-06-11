@@ -8,7 +8,6 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import dev.ryanhcode.sable.companion.SubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3d;
-import dev.ryanhcode.sable.sublevel.SubLevel; // Imports the main class file from your project
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;

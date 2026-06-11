@@ -35,27 +35,27 @@ public class GrabPhysicsBlock extends Block implements EntityBlock {
         if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
 
             // 1. Define a 1x1x1 bounding box area for the single block position
-            BoundingBox3i singleBlockBounds = new BoundingBox3i(
-                    pos.getX(), pos.getY(), pos.getZ(),
-                    pos.getX(), pos.getY(), pos.getZ()
-            );
+//            BoundingBox3i singleBlockBounds = new BoundingBox3i(
+//                    pos.getX(), pos.getY(), pos.getZ(),
+//                    pos.getX(), pos.getY(), pos.getZ()
+//            );
 
             // 2. Wrap our position in a List to satisfy the Iterable requirement
             List<BlockPos> blockList = List.of(pos);
 
             // 3. Invoke assembleBlocks matching the verified 4-argument signature perfectly
-            Object createdSubLevel = SubLevelAssemblyHelper.assembleBlocks(
-                    serverLevel,
-                    pos,           // Anchor point
-                    blockList,     // Iterable collections
-                    singleBlockBounds // BoundingBox bounds descriptor
-            );
+//            Object createdSubLevel = SubLevelAssemblyHelper.assembleBlocks(
+//                    serverLevel,
+//                    pos,           // Anchor point
+//                    blockList,     // Iterable collections
+//                    singleBlockBounds // BoundingBox bounds descriptor
+//            );
 
             // 4. Cache the moving sub-level reference in our local BlockEntity data
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof GrabPhysicsBlockEntity physicsBe) {
-                physicsBe.setActiveSubLevel(createdSubLevel);
-            }
+//            BlockEntity be = level.getBlockEntity(pos);
+//            if (be instanceof GrabPhysicsBlockEntity physicsBe) {
+//                physicsBe.setActiveSubLevel(createdSubLevel);
+//            }
 
             return InteractionResult.SUCCESS;
         }

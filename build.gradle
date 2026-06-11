@@ -10,20 +10,17 @@ group = mod_group_id
 
 repositories {
     exclusiveContent {
-        // Sable Physics Engine & Companion Official Repository
         forRepository {
             maven {
-                // ✨ THE FIX: Make sure the URL path includes 'maven.' and '/releases'!
-                url = "https://ryanhcode.dev"
+                url = "https://maven.ryanhcode.dev/releases"
                 name = "RyanHCode Maven"
             }
         }
         filter {
-            includeGroup("dev.ryanhcode.sable")
-            includeGroup("dev.ryanhcode.sable-neoforge")
+            // Keep ONLY this one group. Remove dev.ryanhcode.sable and sable-neoforge
             includeGroup("dev.ryanhcode.sable-companion")
-
         }
+    }
 
             // Official primary home for Foundry & Veil artifacts!
             maven { url = "https://maven.blamejared.com/" }
@@ -39,7 +36,6 @@ repositories {
 
             mavenCentral()
         }
-    }
 
 
     base {
@@ -126,17 +122,18 @@ repositories {
 
 
         dependencies {
-            // Keep your existing api() declaration for sable-common
-            //api("dev.ryanhcode.sable:sable-common-${project.minecraft_version}:${project.sable_version}")
-            implementation "curse.maven:sable-1312371:7948753"
+            /* Sable Companion */
+            jarJar(api("dev.ryanhcode.sable-companion:sable-companion-common-1.21.1:1.4.2")) {
+                version {
+                    prefer("1.4.2")
+                }
+            }
 
-
-            // --- FALLBACK RUNTIMES: Force Gradle to find them via CurseMaven ---
-            // Veil (Project ID: 633345)
             implementation "curse.maven:veil-lib-1517006:8110943"
             implementation "curse.maven:forge-config-api-port-547434:6798216"
-
             implementation "curse.maven:pehkui-319596:5446174"
+
+
         }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -170,17 +167,6 @@ repositories {
             publications {
                 register('mavenJava', MavenPublication) {
                     from components.java
-                }
-            }
-            repositories {
-                mavenCentral()
-                maven {
-                    url = "file://${project.projectDir}/repo"
-                    url = "https://maven.ryanhcode.dev/releases"
-                    url = "https://cursemaven.com"
-                    content {
-                        includeGroup "curse.maven"
-                    }
                 }
             }
 

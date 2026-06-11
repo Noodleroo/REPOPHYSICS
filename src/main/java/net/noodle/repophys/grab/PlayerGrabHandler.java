@@ -8,7 +8,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
-import net.noodle.repophys.RepophysConfig;
+import net.noodle.repophys.util.RepophysConfig;
 import net.noodle.repophys.client.ClientInputHandler;
 import net.noodle.repophys.network.ServerboundGrabPacket;
 

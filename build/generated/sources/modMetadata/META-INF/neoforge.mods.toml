@@ -29,7 +29,7 @@ displayName = "REPO PHYSICS" #mandatory
 # A text field displayed in the mod UI
 #credits="" #optional
 # A text field displayed in the mod UI
-authors = "" #optional
+authors = "Noodleroo" #optional
 
 # The description text for the mod (multi line!) (#mandatory)
 description = ''''''

@@ -1,14 +1,5 @@
 package net.noodle.repophys.grab;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.noodle.repophys.RepophysConfig;
-import net.noodle.repophys.network.ServerboundGrabPacket;
-
 public class SableGrabEngine {
 /*
     private static int networkThrottleTicks = 0;

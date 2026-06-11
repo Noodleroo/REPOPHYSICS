@@ -1,4 +1,4 @@
-package net.noodle.repophys;
+package net.noodle.repophys.util;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
