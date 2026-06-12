@@ -59,7 +59,7 @@ public class ModNetworking {
             ServerLevel world = player.serverLevel();
 
             //Tells the engine to run the drag and positioning logic!
-            PhysicsEngine.tickGrabPhysics(player, world, grabData.targetBlockPos(), grabData);
+            //PhysicsEngine.tickGrabPhysics(player, world, grabData.targetBlockPos(), grabData);
         });
     }
 }

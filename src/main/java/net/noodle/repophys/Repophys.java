@@ -16,7 +16,7 @@ public class Repophys {
 
     public Repophys(IEventBus modEventBus, ModContainer modContainer) {
         // Registers your custom blocks/items
-        ModBlocks.register(modEventBus);
+        //ModBlocks.register(modEventBus);
 
         // --- FIXED: Wake up ModNetworking! ---
         ModNetworking.init(modEventBus);

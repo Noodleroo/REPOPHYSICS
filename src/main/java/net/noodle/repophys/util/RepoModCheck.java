@@ -1,4 +1,4 @@
-package com.noodleroo.repophysics.util;
+package net.noodle.repophys.util;
 
 import net.neoforged.fml.ModList;
 
