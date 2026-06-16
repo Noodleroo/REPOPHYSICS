@@ -1,4 +1,4 @@
-package net.noodle.repophys.client; // Adjust to match your package structure
+package net.noodle.repophys.util; // Adjust to match your package structure
 
 public class PlayerPowerUps {
 

@@ -20,6 +20,8 @@ modId = "repophys" #mandatory
 version = "0.01" #mandatory
 # A display name for the mod
 displayName = "REPO PHYSICS" #mandatory
+
+mixins=["repophys.mixin.json"]
 # A URL to query for updates for this mod. See the JSON update specification https://docs.neoforge.net/docs/misc/updatechecker/
 #updateJSONURL="https://change.me.example.invalid/updates.json" #optional
 # A URL for the "homepage" for this mod, displayed in the mod UI
@@ -72,13 +74,22 @@ versionRange = "1.21.1"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies."repophys"]]
-modId = "sable"
-type = "required"
-# This version range declares a minimum of the current minecraft version up to but not including the next major version
-versionRange = "[1.2,)"
-ordering = "AFTER"
-side = "BOTH"
+#[[dependencies.repophys]]
+#modId = "sable"
+#type = "required"
+#versionRange = "[1.2,)"
+#ordering = "AFTER"
+#side = "BOTH"
+#reason = "R.E.P.O Physics requires the Sable mod to function!"
+#referralUrl = "https://www.curseforge.com/minecraft/mc-mods/sable"
+
+#[[dependencies.repophys]]
+#modId = "sabledestructive"
+#type = "required"
+#ordering = "AFTER"
+#side = "BOTH"
+#reason = "Required to calculate kinetic impact damage so valuables can break when dropped!"
+#referralUrl = "https://www.curseforge.com/minecraft/mc-mods/sable-destructive"
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.

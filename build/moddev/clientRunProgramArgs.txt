@@ -22,3 +22,4 @@ C:\\Users\\Reece\\.gradle\\caches\\neoformruntime\\assets
 20240808.144430
 
 # User Supplied Program Arguments
+--mixin.config=repophys.mixins.json
