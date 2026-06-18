@@ -1,69 +1,127 @@
 package net.noodle.repophys.physics;
 
+import dev.ryanhcode.sable.api.physics.PhysicsPipeline;
+import dev.ryanhcode.sable.api.physics.constraint.ConstraintJointAxis;
+import dev.ryanhcode.sable.api.physics.constraint.FreeConstraintConfiguration;
+import dev.ryanhcode.sable.api.physics.constraint.PhysicsConstraintHandle;
+import dev.ryanhcode.sable.api.sublevel.ServerSubLevelContainer;
+import dev.ryanhcode.sable.companion.math.JOMLConversion;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.sublevel.SubLevel;
-import net.minecraft.client.Minecraft;
+import dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.event.tick.LevelTickEvent;
-import net.noodle.repophys.network.GrabActionPacket;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.noodle.repophys.Repophys;
+import org.joml.Quaterniond;
+import org.joml.Vector3d;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+// 1. Registered to the GAME bus so onLevelTick automatically fires
+@EventBusSubscriber(modid = Repophys.MODID)
 public class ObjectGrabber {
 
-    // Stores active grab sessions per player
     public static final Map<UUID, GrabSession> SESSIONS = new HashMap<>();
 
-    // A grab session stores the SubLevel and the distance from the player
-    public record GrabSession(ServerSubLevel sub, double distance) {}
+    // Added offset vector to prevent the object from center-snapping violently upon pickup
+    public record GrabSession(ServerSubLevel sub, PhysicsConstraintHandle handle, double distance, Vec3 offset) {}
 
-    // Called when the player presses the grab key
     public static void startGrab(ServerPlayer player) {
+        // Already grabbing something?
         if (SESSIONS.containsKey(player.getUUID())) return;
 
         ServerLevel level = player.serverLevel();
-        ServerSubLevel hit = raycast(level, player, 5.0);
-
+        ServerSubLevel hit = raycast(level, player, 25.0);
         if (hit == null) return;
 
-        // Distance from player eye to SubLevel center
-        Vec3 center = hit.boundingBox().toMojang().getCenter();
-        double dist = player.getEyePosition().distanceTo(center);
+        // Get Sable physics pipeline
+        ServerSubLevelContainer container = SubLevelContainer.getContainer(level);
+        SubLevelPhysicsSystem physicsSystem = container.physicsSystem();
+        PhysicsPipeline pipeline = physicsSystem.getPipeline();
 
-        SESSIONS.put(player.getUUID(), new GrabSession(hit, dist));
+        // Compute initial grab anchor
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle();
+        Vec3 hitPos = new Vec3(
+                hit.logicalPose().position().x(),
+                hit.logicalPose().position().y(),
+                hit.logicalPose().position().z()
+        );
+
+        double distance = eye.distanceTo(hitPos);
+
+        // Where the player is "holding" the object
+        Vec3 targetPoint = eye.add(look.scale(distance));
+        Vec3 offset = hitPos.subtract(targetPoint);
+
+        // Create a free constraint (like Simulated)
+        FreeConstraintConfiguration config =
+                new FreeConstraintConfiguration(
+                        JOMLConversion.ZERO,        // parent anchor
+                        new Vector3d(),             // child anchor (we update this every physics tick)
+                        new Quaterniond()           // orientation (unused for now)
+                );
+
+        PhysicsConstraintHandle handle =
+                pipeline.addConstraint(null, hit, config);
+
+        // Store session
+        GrabSession session = new GrabSession(hit, handle, distance, offset);
+        SESSIONS.put(player.getUUID(), session);
     }
 
-    // Called when the player releases the grab key
+
     public static void stopGrab(ServerPlayer player) {
         SESSIONS.remove(player.getUUID());
     }
 
-    // Main tick loop — moves grabbed objects
-    @SubscribeEvent
-    public static void onLevelTick(LevelTickEvent.Pre event) {
-        if (!(event.getLevel() instanceof ServerLevel level)) return;
+    public static void physicsTick(SubLevelPhysicsSystem physicsSystem) {
+        ServerLevel level = physicsSystem.getLevel();
 
-        for (ServerPlayer player : level.players()) {
-            GrabSession session = SESSIONS.get(player.getUUID());
-            if (session != null) {
-                updateGrab(player, session);
+        for (UUID uuid : SESSIONS.keySet()) {
+            ServerPlayer player = (ServerPlayer) level.getPlayerByUUID(uuid);
+            if (player == null) continue;
+
+            GrabSession session = SESSIONS.get(uuid);
+            if (session == null) continue;
+
+            ServerSubLevel sub = session.sub();
+            PhysicsConstraintHandle constraint = session.handle();
+
+            if (sub.isRemoved() || !constraint.isValid()) {
+                SESSIONS.remove(uuid);
+                continue;
             }
+
+            // Compute target
+            Vec3 eye = player.getEyePosition();
+            Vec3 look = player.getLookAngle();
+
+            Vec3 baseTarget = eye.add(look.scale(session.distance()));
+            Vec3 finalTarget = baseTarget.add(session.offset());
+
+            // Convert to JOML
+            Vector3d goal = new Vector3d(finalTarget.x, finalTarget.y, finalTarget.z);
+
+            // Apply motors (pull object toward target)
+            float stiffness = 200f;
+            float damping = 20f;
+
+            constraint.setMotor(ConstraintJointAxis.LINEAR_X, goal.x, stiffness, damping, false, 0);
+            constraint.setMotor(ConstraintJointAxis.LINEAR_Y, goal.y, stiffness, damping, false, 0);
+            constraint.setMotor(ConstraintJointAxis.LINEAR_Z, goal.z, stiffness, damping, false, 0);
         }
     }
 
-    // Moves the SubLevel toward the player's cursor
     private static void updateGrab(ServerPlayer player, GrabSession session) {
-
         ServerSubLevel sub = session.sub();
         if (sub == null || sub.isRemoved()) {
             SESSIONS.remove(player.getUUID());
@@ -72,16 +130,17 @@ public class ObjectGrabber {
 
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
-        Vec3 target = eye.add(look.scale(session.distance()));
 
-        // Mutate the SubLevel's pose directly (Sable API)
+        // Target calculation including the initial grip offset
+        Vec3 baseTarget = eye.add(look.scale(session.distance()));
+        Vec3 finalTarget = baseTarget.add(session.offset());
+
+        // Update Sable SubLevel matrix position smoothly
         Pose3d pose = sub.logicalPose();
-        pose.position().set(target.x, target.y, target.z);
+        pose.position().set(finalTarget.x, finalTarget.y, finalTarget.z);
     }
 
-    // Raycast against all SubLevels in the world
     private static ServerSubLevel raycast(ServerLevel level, ServerPlayer player, double maxDistance) {
-
         SubLevelContainer container = SubLevelContainer.getContainer(level);
         if (container == null) return null;
 
@@ -93,7 +152,6 @@ public class ObjectGrabber {
         double closestDist = Double.MAX_VALUE;
 
         for (SubLevel sub : container.getAllSubLevels()) {
-
             AABB aabb = sub.boundingBox().toMojang();
             Optional<Vec3> hitOpt = aabb.clip(eye, end);
 
@@ -107,8 +165,6 @@ public class ObjectGrabber {
                 }
             }
         }
-
         return closest;
     }
-
 }
