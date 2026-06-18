@@ -12,7 +12,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.noodle.repophys.Repophys;
 import net.noodle.repophys.network.GrabActionPacket;
 import net.noodle.repophys.items.DebugSuperShovel;
@@ -39,11 +38,11 @@ public class GlobalInputBlocker {
 
             if (event.getAction() == GLFW.GLFW_PRESS) {
                 isHoldingObject = true;
-                PacketDistributor.sendToServer(new GrabActionPacket(true));
+                Minecraft.getInstance().getConnection().send(new GrabActionPacket(true));
             }
             else if (event.getAction() == GLFW.GLFW_RELEASE) {
                 isHoldingObject = false;
-                PacketDistributor.sendToServer(new GrabActionPacket(false));
+                Minecraft.getInstance().getConnection().send(new GrabActionPacket(false));
             }
         }
     }
